@@ -10,7 +10,6 @@ build/
 
 # Test outputs
 *.txt
-*.json
 !requirements.txt
 
 # IDE

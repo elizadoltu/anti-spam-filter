@@ -2,8 +2,8 @@
 Utility functions for email parsing and file handling.
 """
 import chardet
+import re
 from pathlib import Path
-
 
 class EmailParser:
     """Handles reading and parsing email files with various encodings."""
@@ -13,8 +13,8 @@ class EmailParser:
         """Detect the encoding of a file."""
         with open(file_path, 'rb') as f:
             raw_data = f.read()
-            result = chardet.detect(raw_data)
-            return result['encoding'] if result['encoding'] else 'utf-8'
+        result = chardet.detect(raw_data)
+        return result['encoding'] if result['encoding'] else 'utf-8'
     
     @staticmethod
     def read_email(file_path):
@@ -24,13 +24,11 @@ class EmailParser:
         """
         file_path = Path(file_path)
         
-        # Try to detect encoding
         try:
             encoding = EmailParser.detect_encoding(file_path)
         except:
             encoding = 'utf-8'
         
-        # Try multiple encodings if the detected one fails
         encodings_to_try = [encoding, 'utf-8', 'latin-1', 'iso-8859-1', 'cp1252']
         
         for enc in encodings_to_try:
@@ -41,10 +39,8 @@ class EmailParser:
             except:
                 continue
         
-        # Last resort: read as binary and decode with errors ignored
         with open(file_path, 'rb') as f:
             content = f.read().decode('utf-8', errors='ignore')
-        
         return content
     
     @staticmethod
@@ -56,38 +52,50 @@ class EmailParser:
         lines = content.split('\n', 1)
         subject = lines[0].strip() if lines else ""
         body = lines[1] if len(lines) > 1 else ""
-        
         return subject, body
     
     @staticmethod
     def clean_text(text):
         """Clean and normalize text for processing."""
-        # Convert to lowercase
         text = text.lower()
-        
-        # Remove extra whitespace
         text = ' '.join(text.split())
-        
         return text
     
     @staticmethod
     def tokenize(text):
         """
-        Tokenize text into words.
-        Simple word splitting with basic cleanup.
+        Enhanced tokenization with better text preprocessing.
+        Removes HTML, normalizes text, filters stopwords.
         """
-        # Remove common punctuation but keep some meaningful chars
         text = text.lower()
         
+        # Remove HTML tags
+        text = re.sub(r'<[^>]+>', ' ', text)
+        
+        # Remove URLs
+        text = re.sub(r'https?://[^\s]+', ' ', text)
+        text = re.sub(r'www\.[^\s]+', ' ', text)
+        
+        # Remove email addresses
+        text = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', ' ', text)
+        
         # Replace common separators with spaces
-        for char in '.,;:!?()[]{}"\'\n\r\t':
+        for char in '.,;:!?()[]{}"\'\\n\\r\\t':
             text = text.replace(char, ' ')
         
-        # Split into words
-        words = text.split()
+        # Extract words (2-15 characters, alphabetic only)
+        words = re.findall(r'\b[a-z]{2,15}\b', text)
         
-        # Filter out very short words and numbers
-        words = [w for w in words if len(w) > 2 and not w.isdigit()]
+        # Basic stopwords (you can expand this list)
+        stopwords = {
+            'the', 'is', 'at', 'which', 'on', 'a', 'an', 'and', 'or',
+            'but', 'in', 'with', 'to', 'for', 'of', 'as', 'by', 'that',
+            'this', 'it', 'from', 'be', 'are', 'was', 'were', 'been',
+            'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would',
+            'could', 'should', 'may', 'might', 'can'
+        }
+        
+        # Filter out stopwords and very common words
+        words = [w for w in words if w not in stopwords]
         
         return words
-
