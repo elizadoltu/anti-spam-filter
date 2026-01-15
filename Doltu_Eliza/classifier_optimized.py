@@ -135,10 +135,10 @@ class SpamClassifier:
     
     def __init__(self):
         self.naive_bayes = NaiveBayesClassifier()
-        # BALANCED: Good detection with low false positives
-        self.feature_threshold = 48  # Balanced
-        self.nb_weight = 0.58  # Balanced
-        self.feature_weight = 0.42  # Balanced
+        # OPTIMIZED: More conservative thresholds to reduce false positives
+        self.feature_threshold = 50  # Increased from 45
+        self.nb_weight = 0.60  # Increased NB weight (more reliable)
+        self.feature_weight = 0.40  # Decreased feature weight
         self.trained = False
         
         # OPTIMIZATION: Cache for feature extraction
@@ -195,20 +195,20 @@ class SpamClassifier:
         combined_score = (self.nb_weight * spam_probability + 
                          self.feature_weight * normalized_feature_score)
         
-        # TUNED: Target 93%+ detection with ~2% FP
-        threshold = 0.46
+        # OPTIMIZED: More conservative thresholds to reduce false positives
+        threshold = 0.52  # Increased from 0.45
         
-        # High confidence spam
-        if feature_score > 68 and spam_probability > 0.58:
+        # High confidence spam (very obvious)
+        if feature_score > 75 and spam_probability > 0.65:
             return True
         
-        # High confidence clean (conservative)
-        if feature_score < 16 and spam_probability < 0.50:
+        # High confidence clean (be more conservative)
+        if feature_score < 20 and spam_probability < 0.55:
             return False
         
-        # Catch more spam (aggressive)
-        if spam_probability > 0.52 and feature_score > 38:
-            return True
+        # Extra conservative: require stronger evidence for spam
+        if spam_probability < 0.58 and feature_score < 50:
+            return False
         
         return combined_score > threshold
     
@@ -247,4 +247,5 @@ class SpamClassifier:
         self.nb_weight = model_data.get('nb_weight', 0.60)
         self.feature_weight = model_data.get('feature_weight', 0.40)
         self.trained = model_data.get('trained', False)
+
 
