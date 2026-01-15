@@ -18,7 +18,7 @@ def write_info(output_file):
         "student_name": "Eliza Teodora Doltu",
         "project_name": "Anti-Spam Filter",
         "student_alias": "eliza.doltu",
-        "project_version": "1.1.0"
+        "project_version": "1.2.0"
     }
     
     with open(output_file, 'w', encoding='utf-8') as f:
