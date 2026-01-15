@@ -4,6 +4,7 @@ Extracts various spam indicators from email content.
 """
 import re
 from utils import EmailParser
+from ngram_detector import NGramDetector
 
 class FeatureExtractor:
     """Extract spam-indicative features from email content."""
@@ -66,6 +67,9 @@ class FeatureExtractor:
         subject, body = EmailParser.parse_email(content)
         full_text = content.lower()
         
+        # Tokenize for n-gram detection
+        words = EmailParser.tokenize(full_text)
+        
         features = {
             'url_count': FeatureExtractor.count_urls(full_text),
             'excessive_caps': FeatureExtractor.check_excessive_caps(content),
@@ -77,6 +81,7 @@ class FeatureExtractor:
             'number_count': FeatureExtractor.count_numbers(full_text),
             'currency_symbols': FeatureExtractor.count_currency_symbols(content),
             'email_addresses': FeatureExtractor.count_email_addresses(full_text),
+            'ngram_spam_score': NGramDetector.count_spam_phrases(words),  # NEW: N-gram phrases!
             # New advanced features
             'text_length': FeatureExtractor.analyze_length(content),
             'special_char_density': FeatureExtractor.special_char_density(content),
@@ -306,6 +311,7 @@ class FeatureExtractor:
             'excessive_punctuation': 1.2,
             'spam_keywords_count': 2.0,
             'spam_phrases_count': 3.0,
+            'ngram_spam_score': 3.5,  # NEW: N-grams are very important!
             'suspicious_html': 2.0,
             'subject_spam_score': 2.5,
             'number_count': 0.5,

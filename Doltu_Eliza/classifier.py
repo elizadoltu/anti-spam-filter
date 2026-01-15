@@ -1,10 +1,5 @@
 """
-OPTIMIZED Spam Classifier - Faster and more accurate
-Key improvements:
-1. Vocabulary pruning (remove rare words)
-2. Cached feature extraction
-3. Optimized thresholds for lower false positives
-4. Faster tokenization
+Spam Classifier using Naive Bayes and feature-based detection.
 """
 import json
 import math
@@ -12,7 +7,6 @@ from collections import defaultdict
 from pathlib import Path
 from utils import EmailParser
 from feature_extractor import FeatureExtractor
-
 
 class NaiveBayesClassifier:
     """Multinomial Naive Bayes classifier for spam detection."""
@@ -26,53 +20,32 @@ class NaiveBayesClassifier:
         self.clean_doc_count = 0
         self.vocabulary = set()
         self.alpha = 1.0
-        
-        # OPTIMIZATION: Cache for word probabilities
-        self._prob_cache = {}
     
-    def train(self, clean_emails, spam_emails, min_word_freq=2):
+    def train(self, clean_emails, spam_emails):
         """
         Train the classifier on clean and spam emails.
-        OPTIMIZATION: Prune rare words (appear < min_word_freq times)
+        Args:
+            clean_emails: List of clean email texts
+            spam_emails: List of spam email texts
         """
-        # First pass: count all words
-        temp_spam_counts = defaultdict(int)
-        temp_clean_counts = defaultdict(int)
-        
         for email in clean_emails:
+            words = EmailParser.tokenize(email)
             self.clean_doc_count += 1
-            words = EmailParser.tokenize(email)
             for word in words:
-                temp_clean_counts[word] += 1
-        
-        for email in spam_emails:
-            self.spam_doc_count += 1
-            words = EmailParser.tokenize(email)
-            for word in words:
-                temp_spam_counts[word] += 1
-        
-        # OPTIMIZATION: Keep only words that appear at least min_word_freq times
-        for word, count in temp_clean_counts.items():
-            if count >= min_word_freq or temp_spam_counts[word] >= min_word_freq:
-                self.clean_word_counts[word] = count
-                self.clean_total_words += count
+                self.clean_word_counts[word] += 1
+                self.clean_total_words += 1
                 self.vocabulary.add(word)
         
-        for word, count in temp_spam_counts.items():
-            if count >= min_word_freq or temp_clean_counts[word] >= min_word_freq:
-                self.spam_word_counts[word] = count
-                self.spam_total_words += count
+        for email in spam_emails:
+            words = EmailParser.tokenize(email)
+            self.spam_doc_count += 1
+            for word in words:
+                self.spam_word_counts[word] += 1
+                self.spam_total_words += 1
                 self.vocabulary.add(word)
     
     def get_word_probability(self, word, is_spam):
-        """
-        Calculate P(word|spam) or P(word|clean) with Laplace smoothing.
-        OPTIMIZATION: Use cache for faster lookups
-        """
-        cache_key = (word, is_spam)
-        if cache_key in self._prob_cache:
-            return self._prob_cache[cache_key]
-        
+        """Calculate P(word|spam) or P(word|clean) with Laplace smoothing."""
         if is_spam:
             word_count = self.spam_word_counts[word]
             total_words = self.spam_total_words
@@ -82,15 +55,12 @@ class NaiveBayesClassifier:
         
         vocab_size = len(self.vocabulary)
         probability = (word_count + self.alpha) / (total_words + self.alpha * vocab_size)
-        
-        self._prob_cache[cache_key] = probability
         return probability
     
     def calculate_log_probability(self, text, is_spam):
         """Calculate log probability of text being spam or clean."""
         words = EmailParser.tokenize(text)
         
-        # Prior probability
         total_docs = self.spam_doc_count + self.clean_doc_count
         if total_docs == 0:
             prior = 0.5
@@ -102,11 +72,9 @@ class NaiveBayesClassifier:
         
         log_prob = math.log(prior) if prior > 0 else -100
         
-        # OPTIMIZATION: Only process words in vocabulary (skip unknown words faster)
         for word in words:
-            if word in self.vocabulary:
-                word_prob = self.get_word_probability(word, is_spam)
-                log_prob += math.log(word_prob)
+            word_prob = self.get_word_probability(word, is_spam)
+            log_prob += math.log(word_prob)
         
         return log_prob
     
@@ -127,22 +95,15 @@ class NaiveBayesClassifier:
         
         return spam_probability > 0.5, spam_probability
 
-
 class SpamClassifier:
-    """
-    OPTIMIZED Hybrid spam classifier.
-    """
+    """Hybrid spam classifier combining Naive Bayes with feature-based detection."""
     
     def __init__(self):
         self.naive_bayes = NaiveBayesClassifier()
-        # BALANCED: Good detection with low false positives
-        self.feature_threshold = 48  # Balanced
-        self.nb_weight = 0.58  # Balanced
-        self.feature_weight = 0.42  # Balanced
+        self.feature_threshold = 45  # Lowered from 52
+        self.nb_weight = 0.55  # Reduced from 0.72
+        self.feature_weight = 0.45  # Increased from 0.28
         self.trained = False
-        
-        # OPTIMIZATION: Cache for feature extraction
-        self._feature_cache = {}
     
     def train_from_folders(self, clean_folder, spam_folder):
         """Train the classifier from folders containing clean and spam emails."""
@@ -170,44 +131,39 @@ class SpamClassifier:
                         pass
         
         if clean_emails and spam_emails:
-            # OPTIMIZATION: Prune vocabulary (min_word_freq=3 for speed)
-            self.naive_bayes.train(clean_emails, spam_emails, min_word_freq=3)
+            self.naive_bayes.train(clean_emails, spam_emails)
             self.trained = True
     
     def classify(self, email_content):
         """
         Classify an email as spam (True) or clean (False).
-        OPTIMIZED for speed and accuracy.
+        Uses hybrid approach combining Naive Bayes and feature extraction.
         """
-        # Extract features
         features = FeatureExtractor.extract_features(email_content)
         feature_score = FeatureExtractor.compute_total_score(features)
         
-        # If not trained, use feature-based classification only
         if not self.trained:
             return feature_score > self.feature_threshold
         
-        # Get Naive Bayes prediction
         is_spam_nb, spam_probability = self.naive_bayes.predict(email_content)
         
-        # Combine scores
         normalized_feature_score = min(feature_score / 100.0, 1.0)
-        combined_score = (self.nb_weight * spam_probability + 
+        
+        combined_score = (self.nb_weight * spam_probability +
                          self.feature_weight * normalized_feature_score)
         
-        # TUNED: Target 93%+ detection with ~2% FP
-        threshold = 0.46
+        # More aggressive threshold - lowered from 0.58 to 0.45
+        threshold = 0.45
         
-        # High confidence spam
-        if feature_score > 68 and spam_probability > 0.58:
+        # Adjusted heuristics for better detection
+        if feature_score > 65 and spam_probability > 0.42:
             return True
         
-        # High confidence clean (conservative)
-        if feature_score < 16 and spam_probability < 0.50:
+        if feature_score < 25 and spam_probability < 0.50:
             return False
         
-        # Catch more spam (aggressive)
-        if spam_probability > 0.52 and feature_score > 38:
+        # More aggressive spam detection on borderline cases
+        if spam_probability > 0.48 and feature_score > 35:
             return True
         
         return combined_score > threshold
@@ -243,8 +199,7 @@ class SpamClassifier:
         self.naive_bayes.spam_doc_count = model_data['spam_doc_count']
         self.naive_bayes.clean_doc_count = model_data['clean_doc_count']
         self.naive_bayes.vocabulary = set(model_data['vocabulary'])
-        self.feature_threshold = model_data.get('feature_threshold', 50)
-        self.nb_weight = model_data.get('nb_weight', 0.60)
-        self.feature_weight = model_data.get('feature_weight', 0.40)
+        self.feature_threshold = model_data.get('feature_threshold', 45)
+        self.nb_weight = model_data.get('nb_weight', 0.55)
+        self.feature_weight = model_data.get('feature_weight', 0.45)
         self.trained = model_data.get('trained', False)
-

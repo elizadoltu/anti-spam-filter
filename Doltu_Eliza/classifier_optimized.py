@@ -249,3 +249,4 @@ class SpamClassifier:
         self.trained = model_data.get('trained', False)
 
 
+
